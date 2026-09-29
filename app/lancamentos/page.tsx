@@ -1,9 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Lancamento, TIPOS_SUGERIDOS } from "@/lib/types";
-import { useLancamentos, setLancamentos } from "@/lib/store";
+import {
+  atualizarLancamento,
+  criarLancamento,
+  excluirLancamento,
+  listarLancamentos,
+} from "@/lib/api";
 import { formatBRL } from "@/lib/format";
 
 function emptyForm() {
@@ -11,9 +16,29 @@ function emptyForm() {
 }
 
 export default function LancamentosPage() {
-  const itens = useLancamentos();
+  const [itens, setItens] = useState<Lancamento[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [editId, setEditId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    listarLancamentos()
+      .then((dados) => {
+        if (!cancelado) setItens(dados);
+      })
+      .catch((e) => {
+        if (!cancelado) setErro(e instanceof Error ? e.message : "Erro ao carregar.");
+      })
+      .finally(() => {
+        if (!cancelado) setCarregando(false);
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, []);
 
   const total = itens.reduce((soma, item) => soma + item.valor, 0);
 
@@ -21,38 +46,35 @@ export default function LancamentosPage() {
     setForm((atual) => ({ ...atual, [campo]: valor }));
   }
 
-  function submeter(e: React.FormEvent) {
+  async function submeter(e: React.FormEvent) {
     e.preventDefault();
     const valorNumerico = Number(form.valor.replace(",", "."));
     if (!form.empresa.trim() || !form.tipo.trim() || !valorNumerico) return;
 
-    if (editId) {
-      setLancamentos(
-        itens.map((item) =>
-          item.id === editId
-            ? {
-                ...item,
-                empresa: form.empresa.trim(),
-                tipo: form.tipo.trim(),
-                motivo: form.motivo.trim(),
-                valor: valorNumerico,
-              }
-            : item
-        )
-      );
-      setEditId(null);
-    } else {
-      const novo: Lancamento = {
-        id: crypto.randomUUID(),
-        empresa: form.empresa.trim(),
-        tipo: form.tipo.trim(),
-        motivo: form.motivo.trim(),
-        valor: valorNumerico,
-        data: new Date().toISOString(),
-      };
-      setLancamentos([...itens, novo]);
+    const dados = {
+      empresa: form.empresa.trim(),
+      tipo: form.tipo.trim(),
+      motivo: form.motivo.trim(),
+      valor: valorNumerico,
+    };
+
+    setEnviando(true);
+    setErro(null);
+    try {
+      if (editId) {
+        const atualizado = await atualizarLancamento(editId, dados);
+        setItens((atual) => atual.map((item) => (item.id === editId ? atualizado : item)));
+        setEditId(null);
+      } else {
+        const novo = await criarLancamento(dados);
+        setItens((atual) => [...atual, novo]);
+      }
+      setForm(emptyForm());
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao salvar.");
+    } finally {
+      setEnviando(false);
     }
-    setForm(emptyForm());
   }
 
   function editar(item: Lancamento) {
@@ -65,8 +87,16 @@ export default function LancamentosPage() {
     });
   }
 
-  function excluir(id: string) {
-    setLancamentos(itens.filter((item) => item.id !== id));
+  async function excluir(id: string) {
+    setErro(null);
+    const anteriores = itens;
+    setItens((atual) => atual.filter((item) => item.id !== id));
+    try {
+      await excluirLancamento(id);
+    } catch (e) {
+      setItens(anteriores);
+      setErro(e instanceof Error ? e.message : "Erro ao excluir.");
+    }
     if (editId === id) {
       setEditId(null);
       setForm(emptyForm());
@@ -88,6 +118,12 @@ export default function LancamentosPage() {
             <p className="text-xl font-bold text-slate-900">{formatBRL(total)}</p>
           </div>
         </div>
+
+        {erro && (
+          <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-200">
+            {erro}
+          </div>
+        )}
 
         <form
           onSubmit={submeter}
@@ -153,7 +189,8 @@ export default function LancamentosPage() {
           <div className="mt-4 flex gap-3">
             <button
               type="submit"
-              className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700"
+              disabled={enviando}
+              className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:opacity-60"
             >
               {editId ? "Salvar alteração" : "Adicionar lançamento"}
             </button>
@@ -173,7 +210,12 @@ export default function LancamentosPage() {
         </form>
 
         <ul className="space-y-3">
-          {itens.length === 0 && (
+          {carregando && (
+            <li className="rounded-xl bg-white p-6 text-center text-sm text-slate-400 ring-1 ring-slate-200">
+              Carregando...
+            </li>
+          )}
+          {!carregando && itens.length === 0 && (
             <li className="rounded-xl bg-white p-6 text-center text-sm text-slate-400 ring-1 ring-slate-200">
               Nenhum lançamento ainda.
             </li>

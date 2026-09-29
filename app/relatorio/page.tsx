@@ -1,11 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { useLancamentos } from "@/lib/store";
+import { useEffect, useState } from "react";
+import { Lancamento } from "@/lib/types";
+import { listarLancamentos } from "@/lib/api";
 import { formatBRL } from "@/lib/format";
 
 export default function RelatorioPage() {
-  const itens = useLancamentos();
+  const [itens, setItens] = useState<Lancamento[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    listarLancamentos()
+      .then((dados) => {
+        if (!cancelado) setItens(dados);
+      })
+      .catch((e) => {
+        if (!cancelado) setErro(e instanceof Error ? e.message : "Erro ao carregar.");
+      })
+      .finally(() => {
+        if (!cancelado) setCarregando(false);
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, []);
 
   const total = itens.reduce((soma, item) => soma + item.valor, 0);
 
@@ -50,7 +71,21 @@ export default function RelatorioPage() {
                 </tr>
               </thead>
               <tbody>
-                {itens.length === 0 && (
+                {carregando && (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-10 text-center text-slate-400">
+                      Carregando...
+                    </td>
+                  </tr>
+                )}
+                {!carregando && erro && (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-10 text-center text-red-600">
+                      {erro}
+                    </td>
+                  </tr>
+                )}
+                {!carregando && !erro && itens.length === 0 && (
                   <tr>
                     <td colSpan={4} className="px-6 py-10 text-center text-slate-400">
                       Nenhum lançamento registrado.
