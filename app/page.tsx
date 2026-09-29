@@ -1,9 +1,13 @@
 import Link from "next/link";
+import LogoutButton from "@/components/LogoutButton";
 
 export default function Home() {
   return (
     <main className="flex flex-1 flex-col items-center justify-center px-6 py-16">
       <div className="w-full max-w-sm text-center">
+        <div className="mb-2 flex justify-end">
+          <LogoutButton />
+        </div>
         <p className="text-sm font-semibold uppercase tracking-widest text-sky-600">
           Controle Pessoal
         </p>

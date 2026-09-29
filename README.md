@@ -12,6 +12,21 @@ acesso rápido a **Lançamentos** (cadastro dos gastos) e **Relatório**
   tipo, com opção de impressão/exportação em PDF.
 - Dados salvos em um banco **Postgres** via API routes (`app/api/lancamentos`)
   — persistem entre dispositivos e deploys, não dependem do navegador.
+- **Acesso protegido por senha**: uma única senha (a sua) libera o app.
+  Não há cadastro nem múltiplos usuários — é um acesso pessoal só seu.
+
+## Autenticação
+
+O app fica todo bloqueado (páginas e API) atrás de uma tela de login com
+senha única, configurada por duas variáveis de ambiente:
+
+- `APP_PASSWORD`: a senha que você vai digitar para entrar.
+- `AUTH_SECRET`: um valor aleatório usado para assinar o cookie de sessão
+  (não precisa lembrar dele, só precisa existir e ser o mesmo entre deploys).
+  Gere um com `openssl rand -hex 32` ou `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
+
+Configure as duas na Vercel (Settings → Environment Variables, em
+Production e Preview) e localmente no `.env.local`.
 
 ## Banco de dados
 
