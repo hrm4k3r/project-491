@@ -4,11 +4,34 @@ declare global {
   var _pgPool: Pool | undefined;
 }
 
+function findConnectionString(): string | undefined {
+  const diretas = [
+    process.env.DATABASE_URL,
+    process.env.POSTGRES_URL,
+    process.env.POSTGRES_URL_NON_POOLING,
+  ];
+  for (const valor of diretas) {
+    if (valor) return valor;
+  }
+
+  const entradas = Object.entries(process.env);
+
+  const pooled = entradas.find(
+    ([chave]) => /_POSTGRES_URL$/.test(chave) && !/(NO_SSL|PRISMA)/.test(chave)
+  );
+  if (pooled) return pooled[1];
+
+  const database = entradas.find(([chave]) => /_DATABASE_URL$/.test(chave));
+  if (database) return database[1];
+
+  const naoPooled = entradas.find(([chave]) => /_POSTGRES_URL_NON_POOLING$/.test(chave));
+  if (naoPooled) return naoPooled[1];
+
+  return undefined;
+}
+
 function createPool(): Pool {
-  const connectionString =
-    process.env.DATABASE_URL ??
-    process.env.POSTGRES_URL ??
-    process.env.POSTGRES_URL_NON_POOLING;
+  const connectionString = findConnectionString();
 
   if (!connectionString) {
     throw new Error(
